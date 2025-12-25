@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>档案管理平台 - 评估材料身份证打印</title>
+  <!-- 引入外部资源 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <!-- 引入二维码生成库 -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  
+  <style>
+    /* 复用原有样式 */
+    body { font-family: "微软雅黑", "思源黑体", sans-serif; background-color: #f5f7fa; color: #333; margin: 0; padding: 0; }
+    .btn-primary { background-color: #1890FF; border-color: #1890FF; }
+    .btn-primary:hover { background-color: #096DD9; border-color: #096DD9; }
+    .btn-outline-secondary { border-color: #ddd; color: #666; }
+    .btn-outline-secondary:hover { background-color: #f5f5f5; border-color: #ccc; }
+    .card { border: none; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 20px; }
+    .card-header { background: #fff; border-bottom: 1px solid #f0f0f0; border-radius: 12px 12px 0 0; padding: 15px 20px; font-weight: 600; font-size: 15px; }
+    .card-body { padding: 20px; }
+    .badge { font-size: 12px; }
+
+    /* 布局样式复用 */
+    .app-container { display: flex; min-height: 100vh; }
+    .sidebar { width: 220px; background: #fff; box-shadow: 1px 0 2px rgba(0,0,0,0.05); padding: 20px 0; flex-shrink: 0; }
+    .sidebar-logo { text-align: center; padding: 0 20px 20px; border-bottom: 1px solid #f0f0f0; margin-bottom: 20px; }
+    .sidebar-logo img { height: 40px; margin-bottom: 8px; }
+    .sidebar-logo h3 { font-size: 16px; color: #1890FF; font-weight: 600; margin: 0; }
+    .nav-menu { list-style: none; padding: 0; margin: 0; }
+    .nav-item { margin-bottom: 4px; }
+    .nav-link { display: flex; align-items: center; padding: 12px 20px; color: #666; text-decoration: none; font-size: 14px; border-left: 3px solid transparent; }
+    .nav-link:hover, .nav-link.active { color: #1890FF; background-color: #f0f7ff; border-left: 3px solid #1890FF; }
+    .nav-link i { font-size: 18px; margin-right: 12px; width: 20px; text-align: center; }
+    .nav-group-title { padding: 15px 20px 5px; font-size: 12px; color: #999; font-weight: 500; }
+
+    /* 主内容区复用+新增 */
+    .main-content { flex: 1; padding: 20px; overflow-y: auto; }
+    .top-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .page-title { font-size: 20px; font-weight: 600; color: #333; margin: 0; }
+    .user-info { display: flex; align-items: center; }
+    .notification { position: relative; margin-right: 20px; cursor: pointer; }
+    .notification i { font-size: 20px; color: #666; }
+    .notification-badge { position: absolute; top: -5px; right: -5px; width: 18px; height: 18px; background: #FF4D4F; color: #fff; border-radius: 50%; font-size: 12px; text-align: center; line-height: 18px; }
+    .user-avatar { width: 40px; height: 40px; border-radius: 50%; background: #1890FF; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 600; margin-right: 10px; }
+    .user-name { font-size: 14px; font-weight: 500; }
+
+    /* 新增：打印页面样式 */
+    .print-tabs { border-bottom: 1px solid #e8e8e8; margin-bottom: 20px; }
+    .print-tab { padding: 10px 20px; cursor: pointer; font-weight: 500; color: #666; border-bottom: 2px solid transparent; display: inline-block; }
+    .print-tab.active { color: #1890FF; border-bottom: 2px solid #1890FF; }
+    
+    .filter-bar { background: #fff; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 15px; align-items: center; }
+    .filter-item { flex: 1; min-width: 180px; }
+    .filter-item label { display: block; margin-bottom: 8px; font-weight: 500; font-size: 14px; }
+    .filter-item select, .filter-item input { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+    .filter-actions { display: flex; gap: 10px; align-items: flex-end; }
+    
+    .print-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; }
+    .print-table th, .print-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #f0f0f0; }
+    .print-table th { background-color: #f8f9fa; font-weight: 600; font-size: 14px; }
+    .print-table tbody tr:hover { background-color: #f9f9f9; }
+    
+    .print-table .form-check { margin: 0; }
+    .print-table .form-check-input { cursor: pointer; }
+    
+    .level-tag { padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+    .level-1 { background: #e6f7ff; color: #1890FF; }
+    .level-2 { background: #f6ffed; color: #52C41A; }
+    .level-3 { background: #fff7e6; color: #FAAD14; }
+    .level-4 { background: #fff2f0; color: #FF4D4F; }
+    
+    .action-buttons { display: flex; gap: 5px; }
+    .btn-xs { padding: 2px 8px; font-size: 12px; }
+    
+    .bottom-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
+    .batch-actions { display: flex; gap: 10px; }
+    
+    /* 打印预览弹窗样式 */
+    .preview-container { background: #fff; padding: 20px; max-height: 70vh; overflow-y: auto; }
+    .print-preview { position: relative; width: 210mm; height: 297mm; margin: 0 auto; border: 1px solid #ddd; padding: 2cm; box-sizing: border-box; background: #fff; }
+    .watermark { position: absolute; bottom: 2cm; right: 2cm; color: rgba(0,0,0,0.1); font-size: 14px; transform: rotate(-15deg); pointer-events: none; }
+    .page-number { position: absolute; bottom: 1cm; left: 50%; transform: translateX(-50%); color: #999; font-size: 12px; }
+    
+    .id-card-preview { display: flex; gap: 20px; justify-content: center; }
+    .id-card { width: 85.6mm; height: 54mm; border: 1px solid #ddd; border-radius: 4px; padding: 10px; position: relative; }
+    .id-card-front { background: #f8f9fa; }
+    .id-card-back { background: #f0f0f0; }
+    
+    /* 打印设置样式 */
+    .setting-item { margin-bottom: 15px; }
+    .setting-item label { display: block; margin-bottom: 8px; font-weight: 500; }
+    .copies-input { width: 80px; display: inline-block; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- 侧边导航 -->
+    <div class="sidebar">
+      <div class="sidebar-logo">
+        <img src="https://via.placeholder.com/80x40?text=居家长护" alt="系统Logo">
+        <h3>档案管理平台</h3>
+      </div>
+      
+      <div class="nav-group-title">档案管理</div>
+      <ul class="nav-menu">
+        <li class="nav-item">
+          <a href="index.html" class="nav-link">
+            <i class="fa fa-search"></i>
+            <span>电子档案查询</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="档案材料导入.html" class="nav-link">
+            <i class="fa fa-camera"></i>
+            <span>档案材料录入</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="服务计划.html" class="nav-link">
+            <i class="fa fa-check-square-o"></i>
+            <span>服务计划记录接收</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="打印.html" class="nav-link active">
+            <i class="fa fa-print"></i>
+            <span>评估相关材料打印</span>
+          </a>
+        </li>    
+      </ul>
+    </div>
+
+    <!-- 主内容区 -->
+    <div class="main-content">
+      <!-- 顶部导航 -->
+      <div class="top-nav">
+        <h1 class="page-title">评估材料和身份证打印</h1>
+        <div class="user-info">
+          <div class="notification">
+            <i class="fa fa-bell-o"></i>
+            <span class="notification-badge">1</span>
+          </div>
+          <div class="user-avatar">档</div>
+          <div class="user-name">档案管理员</div>
+        </div>
+      </div>
+
+      <!-- 打印方式标签页 -->
+      <div class="print-tabs">
+        <div class="print-tab active" id="tab-evaluation">评估材料打印</div>
+        <div class="print-tab" id="tab-idcard">身份证打印</div>
+        <div class="print-tab" id="tab-service">服务计划/记录打印</div>
+      </div>
+
+      <!-- 评估材料打印区域 -->
+      <div id="evaluation-section">
+        <!-- 筛选区域 -->
+        <div class="filter-bar">
+          <div class="filter-item">
+            <label>行政区域</label>
+            <select id="district">
+              <option value="">全部区域</option>
+              <option value="district1">越城区</option>
+              <option value="district2">柯桥区</option>
+              <option value="district3">上虞区</option>
+            </select>
+          </div>
+          <div class="filter-item">
+            <label>评估日期</label>
+            <input type="date" id="evalStartDate" placeholder="开始日期">
+          </div>
+          <div class="filter-item">
+            <label>至</label>
+            <input type="date" id="evalEndDate" placeholder="结束日期">
+          </div>
+          <div class="filter-item">
+            <label>评估等级</label>
+            <select id="evalLevel">
+              <option value="">全部等级</option>
+              <option value="1">一级</option>
+              <option value="2">二级</option>
+              <option value="3">三级</option>
+              <option value="4">四级</option>
+            </select>
+          </div>
+          <div class="filter-item">
+            <label>服务对象</label>
+            <input type="text" id="evalName" placeholder="姓名/身份证号">
+          </div>
+          <div class="filter-actions">
+            <button class="btn btn-primary">
+              <i class="fa fa-search"></i> 查询
+            </button>
+            <button class="btn btn-outline-secondary">
+              <i class="fa fa-refresh"></i> 重置
+            </button>
+          </div>
+        </div>
+
+        <!-- 评估材料列表 -->
+        <div class="card">
+          <div class="card-header">评估材料列表</div>
+          <div class="card-body p-0">
+            <table class="print-table">
+              <thead>
+                <tr>
+                  <th width="50"><input type="checkbox" id="checkAllEvaluation"></th>
+                  <th>序号</th>
+                  <th>服务对象</th>
+                  <th>身份证号</th>
+                  <th>行政区域</th>
+                  <th>评估等级</th>
+                  <th>评估日期</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><input type="checkbox" name="evaluationItem" value="1"></td>
+                  <td>1</td>
+                  <td>张三</td>
+                  <td>330623********1234</td>
+                  <td>越城区</td>
+                  <td><span class="level-tag level-2">二级</span></td>
+                  <td>2024-10-15</td>
+                  <td class="action-buttons">
+                    <button class="btn btn-xs btn-outline-secondary" onclick="previewEvaluation(1)">预览</button>
+                    <button class="btn btn-xs btn-primary" onclick="printEvaluation(1)">打印</button>
+                  </td>
+                </tr>
+                <tr>
+                  <td><input type="checkbox" name="evaluationItem" value="2"></td>
+                  <td>2</td>
+                  <td>李四</td>
+                  <td>330623********5678</td>
+                  <td>柯桥区</td>
+                  <td><span class="level-tag level-3">三级</span></td>
+                  <td>2024-10-20</td>
+                  <td class="action-buttons">
+                    <button class="btn btn-xs btn-outline-secondary" onclick="previewEvaluation(2)">预览</button>
+                    <button class="btn btn-xs btn-primary" onclick="printEvaluation(2)">打印</button>
+                  </td>
+                </tr>
+                <tr>
+                  <td><input type="checkbox" name="evaluationItem" value="3"></td>
+                  <td>3</td>
+                  <td>王五</td>
+                  <td>330623********9012</td>
+                  <td>越城区</td>
+                  <td><span class="level-tag level-4">四级</span></td>
+                  <td>2024-10-25</td>
+                  <td class="action-buttons">
+                    <button class="btn btn-xs btn-outline-secondary" onclick="previewEvaluation(3)">预览</button>
+                    <button class="btn btn-xs btn-primary" onclick="printEvaluation(3)">打印</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 服务计划/记录打印区域（默认隐藏） -->
+      <div id="service-section" style="display: none;">
+        <!-- 筛选区域 -->
+        <div class="filter-bar">
+          <div class="filter-item">
+            <label>材料类型</label>
+            <select id="serviceType">
+              <option value="service_plan">服务计划</option>
+              <option value="service_record">服务记录</option>
+            </select>
+          </div>
+          <div class="filter-item">
+            <label>服务对象</label>
+            <input type="text" id="serviceName" placeholder="姓名/身份证号">
+          </div>
+          <div class="filter-item">
+            <label>护理员</label>
+            <select id="serviceNurse">
+              <option value="">全部护理员</option>
+              <option value="nurse1">张护理员</option>
+              <option value="nurse2">李护理员</option>
+              <option value="nurse3">王护理员</option>
+            </select>
+          </div>
+          <div class="filter-item">
+            <label>月份</label>
+            <input type="month" id="serviceMonth" value="2024-11">
+          </div>
+          <div class="filter-actions">
+            <button class="btn btn-primary" onclick="searchServiceMaterials()">
+              <i class="fa fa-search"></i> 查询
+            </button>
+            <button class="btn btn-outline-secondary" onclick="resetServiceFilter()">
+              <i class="fa fa-refresh"></i> 重置
+            </button>
+          </div>
+        </div>
+
+        <!-- 服务计划/记录列表 -->
+        <div class="card">
+          <div class="card-header">服务计划/记录列表</div>
+          <div class="card-body p-0">
+            <table class="print-table">
+              <thead>
+                <tr>
+                  <th width="50"><input type="checkbox" id="checkAllService"></th>
+                  <th>序号</th>
+                  <th>服务对象</th>
+                  <th>身份证号</th>
+                  <th>护理员</th>
+                  <th>材料类型</th>
+                  <th>月份</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="serviceTableBody">
+                <tr>
+                  <td><input type="checkbox" name="serviceItem" value="1"></td>
+                  <td>1</td>
+                  <td>张三</td>
+                  <td>330623********1234</td>
+                  <td>张护理员</td>
+                  <td>服务计划</td>
+                  <td>2024-11</td>
+                  <td class="action-buttons">
+                    <button class="btn btn-xs btn-outline-secondary" onclick="previewService(1, 'service_plan')">预览</button>
+                    <button class="btn btn-xs btn-primary" onclick="printService(1, 'service_plan')">打印</button>
+                  </td>
+                </tr>
+                <tr>
+                  <td><input type="checkbox" name="serviceItem" value="2"></td>
+                  <td>2</td>
+                  <td>张三</td>
+                  <td>330623********1234</td>
+                  <td>张护理员</td>
+                  <td>服务记录</td>
+                  <td>2024-11</td>
+                  <td class="action-buttons">
+                    <button class="btn btn-xs btn-outline-secondary" onclick="previewService(2, 'service_record')">预览</button>
+                    <button class="btn btn-xs btn-primary" onclick="printService(2, 'service_record')">打印</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 身份证打印区域（默认隐藏） -->
+      <div id="idcard-section" style="display: none;">
+        <!-- 筛选区域 -->
+        <div class="filter-bar">
+          <div class="filter-item">
+            <label>行政区域</label>
+            <select id="idDistrict">
+              <option value="">全部区域</option>
+              <option value="district1">越城区</option>
+              <option value="district2">柯桥区</option>
+              <option value="district3">上虞区</option>
+            </select>
+          </div>
+          <div class="filter-item">
+            <label>服务对象</label>
+            <input type="text" id="idName" placeholder="姓名/身份证号">
+          </div>
+          <div class="filter-item">
+            <label>档案状态</label>
+            <select id="idStatus">
+              <option value="">全部状态</option>
+              <option value="active">已建档</option>
+              <option value="expired">已过期</option>
+            </select>
+          </div>
+          <div class="filter-actions">
+            <button class="btn btn-primary">
+              <i class="fa fa-search"></i> 查询
+            </button>
+            <button class="btn btn-outline-secondary">
+              <i class="fa fa-refresh"></i> 重置
+            </button>
+          </div>
+        </div>
+
+        <!-- 身份证列表 -->
+        <div class="card">
+          <div class="card-header">身份证打印列表</div>
+          <div class="card-body p-0">
+            <table class="print-table">
+              <thead>
+                <tr>
+                  <th width="50"><input type="checkbox" id="checkAllIdcard"></th>
+                  <th>序号</th>
+                  <th>姓名</th>
+                  <th>身份证号</th>
+                  <th>居住地址</th>
+                  <th>建档日期</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><input type="checkbox" name="idcardItem" value="1"></td>
+                  <td>1</td>
+                  <td>张三</td>
+                  <td>330623********1234</td>
+                  <td>越城区XX街道XX小区</td>
+                  <td>2024-09-01</td>
+                  <td class="action-buttons">
+                    <button class="btn btn-xs btn-outline-secondary" onclick="previewIdcard(1)">预览</button>
+                    <button class="btn btn-xs btn-primary" onclick="printIdcard(1)">打印</button>
+                  </td>
+                </tr>
+                <tr>
+                  <td><input type="checkbox" name="idcardItem" value="2"></td>
+                  <td>2</td>
+                  <td>李四</td>
+                  <td>330623********5678</td>
+                  <td>柯桥区XX镇XX村</td>
+                  <td>2024-09-10</td>
+                  <td class="action-buttons">
+                    <button class="btn btn-xs btn-outline-secondary" onclick="previewIdcard(2)">预览</button>
+                    <button class="btn btn-xs btn-primary" onclick="printIdcard(2)">打印</button>
+                  </td>
+                </tr>
+                <tr>
+                  <td><input type="checkbox" name="idcardItem" value="3"></td>
+                  <td>3</td>
+                  <td>王五</td>
+                  <td>330623********9012</td>
+                  <td>越城区XX路XX号</td>
+                  <td>2024-09-15</td>
+                  <td class="action-buttons">
+                    <button class="btn btn-xs btn-outline-secondary" onclick="previewIdcard(3)">预览</button>
+                    <button class="btn btn-xs btn-primary" onclick="printIdcard(3)">打印</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 底部操作按钮 -->
+      <div class="bottom-actions">
+        <div>共 <strong>3</strong> 条记录</div>
+        <div class="batch-actions">
+          <button class="btn btn-outline-secondary" onclick="openPrintSettings()">
+            <i class="fa fa-cog"></i> 打印设置
+          </button>
+          <button class="btn btn-primary" id="batchPrintBtn">
+            <i class="fa fa-print"></i> 批量打印
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 评估材料预览模态框 -->
+  <div class="modal fade" id="evaluationPreviewModal" tabindex="-1" aria-labelledby="evaluationPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="evaluationPreviewModalLabel">评估材料预览 - 张三</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="preview-container">
+            <div class="print-preview">
+              <h3 style="text-align: center; margin-bottom: 20px;">长期护理保险失能等级评估表</h3>
+              <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
+                <tr>
+                  <td width="20%" style="border: 1px solid #ccc; padding: 8px;">姓名</td>
+                  <td width="30%" style="border: 1px solid #ccc; padding: 8px;">张三</td>
+                  <td width="20%" style="border: 1px solid #ccc; padding: 8px;">性别</td>
+                  <td width="30%" style="border: 1px solid #ccc; padding: 8px;">男</td>
+                </tr>
+                <tr>
+                  <td style="border: 1px solid #ccc; padding: 8px;">身份证号</td>
+                  <td style="border: 1px solid #ccc; padding: 8px;">330623********1234</td>
+                  <td style="border: 1px solid #ccc; padding: 8px;">出生日期</td>
+                  <td style="border: 1px solid #ccc; padding: 8px;">1950-01-15</td>
+                </tr>
+                <tr>
+                  <td style="border: 1px solid #ccc; padding: 8px;">评估日期</td>
+                  <td style="border: 1px solid #ccc; padding: 8px;">2024-10-15</td>
+                  <td style="border: 1px solid #ccc; padding: 8px;">评估等级</td>
+                  <td style="border: 1px solid #ccc; padding: 8px;">二级</td>
+                </tr>
+              </table>
+              
+              <h4 style="margin-top: 30px; margin-bottom: 15px;">评估项目</h4>
+              <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <tr style="background: #f8f9fa;">
+                  <th style="border: 1px solid #ccc; padding: 8px; text-align: center;">评估指标</th>
+                  <th style="border: 1px solid #ccc; padding: 8px; text-align: center;">评估结果</th>
+                  <th style="border: 1px solid #ccc; padding: 8px; text-align: center;">得分</th>
+                </tr>
+                <tr>
+                  <td style="border: 1px solid #ccc; padding: 8px;">进食</td>
+                  <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">需他人协助</td>
+                  <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">5</td>
+                </tr>
+                <tr>
+                  <td style="border: 1px solid #ccc; padding: 8px;">穿衣</td>
+                  <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">需他人帮助</td>
+                  <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">5</td>
+                </tr>
+                <tr>
+                  <td style="border: 1px solid #ccc; padding: 8px;">如厕</td>
+                  <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">需他人看护</td>
+                  <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">3</td>
+                </tr>
+                <tr>
+                  <td style="border: 1px solid #ccc; padding: 8px;">移动</td>
+                  <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">需轮椅辅助</td>
+                  <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">10</td>
+                </tr>
+              </table>
+              
+              <div style="margin-top: 30px;">
+                <div style="float: left; width: 50%;">
+                  <p>评估人员签字：________________</p>
+                  <p>日期：2024-10-15</p>
+                </div>
+                <div style="float: right; width: 50%; text-align: right;">
+                  <p>评估机构（盖章）：</p>
+                  <p>日期：2024-10-16</p>
+                </div>
+                <div style="clear: both;"></div>
+              </div>
+              
+              <div class="watermark">
+                XX机构档案专用<br>
+                打印日期：2024-11-27<br>
+                打印人：档案管理员
+              </div>
+              <div class="page-number">第 1 页 / 共 2 页</div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 20px;">
+              <button class="btn btn-primary" onclick="window.print()">
+                <i class="fa fa-print"></i> 打印此材料
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 身份证预览模态框 -->
+  <div class="modal fade" id="idcardPreviewModal" tabindex="-1" aria-labelledby="idcardPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="idcardPreviewModalLabel">身份证预览 - 张三</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="preview-container">
+            <div class="print-preview" style="height: auto; min-height: 297mm;">
+              <div class="id-card-preview">
+                <div class="id-card id-card-front">
+                  <div style="text-align: center; margin-bottom: 10px;">
+                    <img src="https://via.placeholder.com/50x50?text=国徽" alt="国徽" style="width: 40px;">
+                  </div>
+                  <h4 style="text-align: center; margin: 0;">居民身份证</h4>
+                  <div style="margin-top: 20px;">
+                    <table style="width: 100%; font-size: 14px;">
+                      <tr>
+                        <td width="30%">姓名</td>
+                        <td>张三</td>
+                      </tr>
+                      <tr>
+                        <td>性别</td>
+                        <td>男</td>
+                      </tr>
+                      <tr>
+                        <td>民族</td>
+                        <td>汉</td>
+                      </tr>
+                      <tr>
+                        <td>出生</td>
+                        <td>1950年01月15日</td>
+                      </tr>
+                      <tr>
+                        <td>住址</td>
+                        <td>浙江省绍兴市越城区XX街道XX小区XX幢XX单元XX室</td>
+                      </tr>
+                    </table>
+                  </div>
+                </div>
+                
+                <div class="id-card id-card-back">
+                  <div style="text-align: center; margin-bottom: 20px;">
+                    <img src="https://via.placeholder.com/80x50?text=长城" alt="长城" style="width: 70px;">
+                  </div>
+                  <table style="width: 100%; font-size: 14px;">
+                    <tr>
+                      <td width="30%">公民身份号码</td>
+                      <td>330623********1234</td>
+                    </tr>
+                  </table>
+                  <div style="margin-top: 30px; font-size: 12px; color: #666;">
+                    <p>签发机关：绍兴市公安局越城分局</p>
+                    <p>有效期限：2020.01.01 - 长期</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="watermark" style="bottom: 1cm;">
+                XX机构档案专用<br>
+                打印日期：2024-11-27<br>
+                打印人：档案管理员
+              </div>
+              <div class="page-number">第 1 页 / 共 1 页</div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 20px;">
+              <button class="btn btn-primary" onclick="window.print()">
+                <i class="fa fa-print"></i> 打印身份证
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 服务计划/记录预览模态框 -->
+  <div class="modal fade" id="servicePreviewModal" tabindex="-1" aria-labelledby="servicePreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="servicePreviewModalLabel">服务计划/记录预览</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="preview-container">
+            <div id="servicePreviewContent">
+              <!-- 预览内容将通过JavaScript动态生成 -->
+            </div>
+            <div style="text-align: center; margin-top: 20px;">
+              <button class="btn btn-primary" onclick="printFromPreview()">
+                <i class="fa fa-print"></i> 打印此材料
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 打印设置模态框 -->
+  <div class="modal fade" id="printSettingsModal" tabindex="-1" aria-labelledby="printSettingsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-md">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="printSettingsModalLabel">打印设置</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="setting-item">
+            <label>打印机选择</label>
+            <select class="form-select">
+              <option value="printer1">HP LaserJet Pro M404 (默认)</option>
+              <option value="printer2">Canon iR-ADV C3520</option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <label>纸张大小</label>
+            <select class="form-select">
+              <option value="A4">A4 (210×297mm)</option>
+              <option value="A5">A5 (148×210mm)</option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <label>打印方向</label>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="printDirection" id="portrait" checked>
+              <label class="form-check-label" for="portrait">纵向</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="printDirection" id="landscape">
+              <label class="form-check-label" for="landscape">横向</label>
+            </div>
+          </div>
+          <div class="setting-item">
+            <label>每页打印份数</label>
+            <input type="number" class="form-control copies-input" value="1" min="1" max="5">
+            <div class="form-text">建议：1份存档，1份提交医保</div>
+          </div>
+          <div class="setting-item">
+            <label>水印设置</label>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="watermarkEnabled" checked>
+              <label class="form-check-label" for="watermarkEnabled">添加机构水印</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="button" class="btn btn-primary">保存设置</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 引入Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // 统一消息提示函数
+    function showMessage(message, type = 'info') {
+      const alertClass = {
+        'success': 'alert-success',
+        'error': 'alert-danger',
+        'warning': 'alert-warning',
+        'info': 'alert-info'
+      }[type] || 'alert-info';
+      
+      const alertDiv = document.createElement('div');
+      alertDiv.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
+      alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px; max-width: 500px;';
+      alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      `;
+      document.body.appendChild(alertDiv);
+      
+      setTimeout(() => {
+        alertDiv.remove();
+      }, 3000);
+    }
+  </script>
+  <script>
+    // 标签页切换
+    document.getElementById('tab-evaluation').addEventListener('click', function() {
+      this.classList.add('active');
+      document.getElementById('tab-idcard').classList.remove('active');
+      document.getElementById('tab-service').classList.remove('active');
+      document.getElementById('evaluation-section').style.display = 'block';
+      document.getElementById('idcard-section').style.display = 'none';
+      document.getElementById('service-section').style.display = 'none';
+      document.getElementById('batchPrintBtn').innerHTML = '<i class="fa fa-print"></i> 批量打印评估材料';
+    });
+
+    document.getElementById('tab-idcard').addEventListener('click', function() {
+      this.classList.add('active');
+      document.getElementById('tab-evaluation').classList.remove('active');
+      document.getElementById('tab-service').classList.remove('active');
+      document.getElementById('evaluation-section').style.display = 'none';
+      document.getElementById('idcard-section').style.display = 'block';
+      document.getElementById('service-section').style.display = 'none';
+      document.getElementById('batchPrintBtn').innerHTML = '<i class="fa fa-print"></i> 批量打印身份证';
+    });
+
+    document.getElementById('tab-service').addEventListener('click', function() {
+      this.classList.add('active');
+      document.getElementById('tab-evaluation').classList.remove('active');
+      document.getElementById('tab-idcard').classList.remove('active');
+      document.getElementById('evaluation-section').style.display = 'none';
+      document.getElementById('idcard-section').style.display = 'none';
+      document.getElementById('service-section').style.display = 'block';
+      document.getElementById('batchPrintBtn').innerHTML = '<i class="fa fa-print"></i> 批量打印服务计划/记录';
+    });
+
+    // 全选功能
+    document.getElementById('checkAllEvaluation').addEventListener('change', function() {
+      const checkboxes = document.querySelectorAll('input[name="evaluationItem"]');
+      checkboxes.forEach(checkbox => {
+        checkbox.checked = this.checked;
+      });
+    });
+
+    document.getElementById('checkAllIdcard').addEventListener('change', function() {
+      const checkboxes = document.querySelectorAll('input[name="idcardItem"]');
+      checkboxes.forEach(checkbox => {
+        checkbox.checked = this.checked;
+      });
+    });
+
+    // 预览和打印功能
+    function previewEvaluation(id) {
+      const modal = new bootstrap.Modal(document.getElementById('evaluationPreviewModal'));
+      modal.show();
+    }
+
+    function printEvaluation(id) {
+      previewEvaluation(id);
+      // 实际项目中可直接调用打印API
+    }
+
+    function previewIdcard(id) {
+      const modal = new bootstrap.Modal(document.getElementById('idcardPreviewModal'));
+      modal.show();
+    }
+
+    function printIdcard(id) {
+      previewIdcard(id);
+      // 实际项目中可直接调用打印API
+    }
+
+    function openPrintSettings() {
+      const modal = new bootstrap.Modal(document.getElementById('printSettingsModal'));
+      modal.show();
+    }
+
+    // 批量打印按钮事件
+    document.getElementById('batchPrintBtn').addEventListener('click', function() {
+      let selectedCount = 0;
+      
+      if (document.getElementById('tab-evaluation').classList.contains('active')) {
+        selectedCount = document.querySelectorAll('input[name="evaluationItem"]:checked').length;
+      } else if (document.getElementById('tab-idcard').classList.contains('active')) {
+        selectedCount = document.querySelectorAll('input[name="idcardItem"]:checked').length;
+      } else if (document.getElementById('tab-service').classList.contains('active')) {
+        selectedCount = document.querySelectorAll('input[name="serviceItem"]:checked').length;
+      }
+      
+      if (selectedCount === 0) {
+        showMessage('请至少选择一项进行打印', 'warning');
+        return;
+      }
+      
+      if (confirm(`确认批量打印选中的 ${selectedCount} 项材料吗？`)) {
+        showMessage('批量打印任务已提交，请等待打印机响应', 'success');
+      }
+    });
+
+    // 服务计划/记录相关函数
+    function searchServiceMaterials() {
+      showMessage('查询功能开发中...', 'info');
+    }
+
+    function resetServiceFilter() {
+      document.getElementById('serviceType').value = 'service_plan';
+      document.getElementById('serviceName').value = '';
+      document.getElementById('serviceNurse').value = '';
+      document.getElementById('serviceMonth').value = '2024-11';
+    }
+
+    // 打印服务计划/记录（带二维码）
+    async function printService(id, type) {
+      // 生成二维码数据
+      const qrData = {
+        type: type,
+        recordId: id,
+        clientName: type === 'service_plan' ? '张三' : '张三',
+        nurseName: '张护理员',
+        month: '2024-11',
+        timestamp: new Date().toISOString()
+      };
+      
+      // 生成二维码图片
+      const qrCodeDataURL = await QRCode.toDataURL(JSON.stringify(qrData), {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+
+      // 创建打印窗口
+      const printWindow = window.open('', '_blank');
+      const content = generateServicePrintContent(id, type, qrCodeDataURL);
+      
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>${type === 'service_plan' ? '服务计划' : '服务记录'}打印</title>
+            <style>
+              @page {
+                size: A4 portrait;
+                margin: 20mm;
+              }
+              body { 
+                font-family: "宋体", serif; 
+                padding: 0;
+                margin: 0;
+              }
+              .print-page {
+                position: relative;
+              }
+              .institution-header { text-align: center; margin-bottom: 20px; }
+              .institution-name { font-size: 22px; font-weight: bold; margin-bottom: 5px; }
+              .info-section { margin-bottom: 20px; }
+              .info-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+              .info-table td { border: 1px solid #000; padding: 6px 10px; font-size: 14px; }
+              .info-table .label-cell { width: 100px; background: #f8f8f8; font-weight: bold; }
+              .qr-code-container {
+                position: absolute;
+                bottom: 20mm;
+                right: 20mm;
+                text-align: center;
+              }
+              .qr-code-container img {
+                width: 120px;
+                height: 120px;
+                border: 1px solid #ddd;
+                padding: 5px;
+                background: #fff;
+              }
+              .qr-code-label {
+                font-size: 12px;
+                margin-top: 5px;
+                color: #666;
+              }
+            </style>
+          </head>
+          <body>
+            ${content}
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      
+      setTimeout(() => {
+        printWindow.print();
+      }, 500);
+    }
+
+    // 生成服务计划/记录打印内容
+    function generateServicePrintContent(id, type, qrCodeDataURL) {
+      const isPlan = type === 'service_plan';
+      const title = isPlan ? '服务计划' : '服务记录';
+      
+      return `
+        <div class="print-page">
+          <div class="institution-header">
+            <div class="institution-name">XX市居家养老服务中心</div>
+            <div>${title}</div>
+          </div>
+          
+          <div class="info-section">
+            <table class="info-table">
+              <tr>
+                <td class="label-cell">服务对象：</td>
+                <td>张三（330623********1234）</td>
+                <td class="label-cell">护理员：</td>
+                <td>张护理员</td>
+              </tr>
+              <tr>
+                <td class="label-cell">${isPlan ? '计划月份' : '记录月份'}：</td>
+                <td>2024年11月</td>
+                <td class="label-cell">失能等级：</td>
+                <td>二级</td>
+              </tr>
+            </table>
+          </div>
+          
+          ${isPlan ? `
+            <div class="info-section">
+              <h4>服务计划内容</h4>
+              <p>每周服务频次：3次/周</p>
+              <p>月度总时长：360分钟（6小时）</p>
+              <p>服务项目：生活照料、身体护理、康复训练、心理慰藉</p>
+            </div>
+          ` : `
+            <div class="info-section">
+              <h4>服务记录内容</h4>
+              <p>本月服务总次数：12次</p>
+              <p>本月服务总时长：720分钟（12小时）</p>
+              <p>服务项目完成情况：全部完成</p>
+            </div>
+          `}
+          
+          <div class="qr-code-container">
+            <img src="${qrCodeDataURL}" alt="二维码">
+            <div class="qr-code-label">扫描二维码接收</div>
+          </div>
+        </div>
+      `;
+    }
+
+    // 生成服务预览内容
+    async function generateServicePreview(id, type) {
+      const previewContent = document.getElementById('servicePreviewContent');
+      if (!previewContent) return;
+      
+      // 生成二维码用于预览
+      const qrData = {
+        type: type,
+        recordId: id,
+        clientName: type === 'service_plan' ? '张三' : '张三',
+        nurseName: '张护理员',
+        month: '2024-11',
+        timestamp: new Date().toISOString()
+      };
+      
+      const qrCodeDataURL = await QRCode.toDataURL(JSON.stringify(qrData), {
+        width: 150,
+        margin: 2
+      });
+      
+      previewContent.innerHTML = generateServicePrintContent(id, type, qrCodeDataURL);
+    }
+
+    // 从预览打印
+    let currentPreviewId = null;
+    let currentPreviewType = null;
+    
+    function previewService(id, type) {
+      currentPreviewId = id;
+      currentPreviewType = type;
+      generateServicePreview(id, type);
+      const modal = new bootstrap.Modal(document.getElementById('servicePreviewModal'));
+      modal.show();
+    }
+
+    function printFromPreview() {
+      if (currentPreviewId && currentPreviewType) {
+        printService(currentPreviewId, currentPreviewType);
+      }
+    }
+
+    // 全选服务计划/记录
+    document.getElementById('checkAllService')?.addEventListener('change', function() {
+      const checkboxes = document.querySelectorAll('input[name="serviceItem"]');
+      checkboxes.forEach(checkbox => {
+        checkbox.checked = this.checked;
+      });
+    });
+
+    // 打印页面查询功能
+    function performPrintSearch() {
+      const level = document.getElementById('evalLevel') ? document.getElementById('evalLevel').value : '';
+      const name = document.getElementById('evalName') ? document.getElementById('evalName').value.toLowerCase().trim() : '';
+      
+      // 根据当前激活的标签页选择对应的表格
+      const isEvaluation = document.getElementById('tab-evaluation').classList.contains('active');
+      const tableSelector = isEvaluation ? '#evaluation-section .print-table tbody' : '#idcard-section .print-table tbody';
+      const table = document.querySelector(tableSelector);
+      
+      if (!table) return;
+      
+      const rows = table.querySelectorAll('tr');
+      let visibleCount = 0;
+      
+      rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length === 0) return;
+        
+        const rowLevel = cells[2] ? cells[2].textContent.trim() : '';
+        const rowName = cells[1] ? cells[1].textContent.toLowerCase() : '';
+        const rowIdCard = cells[3] ? cells[3].textContent.toLowerCase() : '';
+        
+        let match = true;
+        
+        // 等级匹配
+        if (level && rowLevel !== level) {
+          match = false;
+        }
+        
+        // 姓名/身份证号匹配
+        if (name && !rowName.includes(name) && !rowIdCard.includes(name)) {
+          match = false;
+        }
+        
+        if (match) {
+          row.style.display = '';
+          visibleCount++;
+        } else {
+          row.style.display = 'none';
+        }
+      });
+      
+      showMessage(`查询完成，找到 ${visibleCount} 条记录`, 'success');
+    }
+
+    // 绑定查询和重置按钮
+    const printSearchBtn = document.getElementById('printSearchBtn');
+    if (printSearchBtn) {
+      printSearchBtn.addEventListener('click', performPrintSearch);
+    }
+
+    const printResetBtn = document.getElementById('printResetBtn');
+    if (printResetBtn) {
+      printResetBtn.addEventListener('click', function() {
+        if (document.getElementById('evalLevel')) document.getElementById('evalLevel').value = '';
+        if (document.getElementById('evalName')) document.getElementById('evalName').value = '';
+        
+        // 显示所有行
+        document.querySelectorAll('.print-table tbody').forEach(tbody => {
+          tbody.querySelectorAll('tr').forEach(row => {
+            row.style.display = '';
+          });
+        });
+        
+        showMessage('筛选条件已重置', 'info');
+      });
+    }
+
+    // 修复模态框关闭后灰屏问题
+    document.addEventListener('DOMContentLoaded', function() {
+      const modals = document.querySelectorAll('.modal');
+      modals.forEach(function(modal) {
+        modal.addEventListener('hidden.bs.modal', function() {
+          const backdrops = document.querySelectorAll('.modal-backdrop');
+          backdrops.forEach(function(backdrop) {
+            backdrop.remove();
+          });
+          document.body.classList.remove('modal-open');
+          document.body.style.overflow = '';
+          document.body.style.paddingRight = '';
+        });
+      });
+    });
+  </script>
+</body>
+</html>

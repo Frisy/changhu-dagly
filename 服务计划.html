@@ -1,0 +1,1323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>档案管理平台 - 服务记录接收</title>
+  <!-- 引入外部资源 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <!-- 引入二维码扫描库 -->
+  <script src="https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
+  <!-- 引入OpenCV.js用于图片预处理 -->
+  <script async src="https://docs.opencv.org/4.8.0/opencv.js"></script>
+  
+  <style>
+    /* 复用原有样式 */
+    body { font-family: "微软雅黑", "思源黑体", sans-serif; background-color: #f5f7fa; color: #333; margin: 0; padding: 0; }
+    .btn-primary { background-color: #1890FF; border-color: #1890FF; }
+    .btn-primary:hover { background-color: #096DD9; border-color: #096DD9; }
+    .btn-outline-secondary { border-color: #ddd; color: #666; }
+    .btn-outline-secondary:hover { background-color: #f5f5f5; border-color: #ccc; }
+    .btn-danger { background-color: #FF4D4F; border-color: #FF4D4F; }
+    .btn-danger:hover { background-color: #d9363e; border-color: #d9363e; }
+    .card { border: none; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 20px; }
+    .card-header { background: #fff; border-bottom: 1px solid #f0f0f0; border-radius: 12px 12px 0 0; padding: 15px 20px; font-weight: 600; font-size: 15px; }
+    .card-body { padding: 20px; }
+    .badge { font-size: 12px; }
+
+    /* 布局样式复用 */
+    .app-container { display: flex; min-height: 100vh; }
+    .sidebar { width: 220px; background: #fff; box-shadow: 1px 0 2px rgba(0,0,0,0.05); padding: 20px 0; flex-shrink: 0; }
+    .sidebar-logo { text-align: center; padding: 0 20px 20px; border-bottom: 1px solid #f0f0f0; margin-bottom: 20px; }
+    .sidebar-logo img { height: 40px; margin-bottom: 8px; }
+    .sidebar-logo h3 { font-size: 16px; color: #1890FF; font-weight: 600; margin: 0; }
+    .nav-menu { list-style: none; padding: 0; margin: 0; }
+    .nav-item { margin-bottom: 4px; }
+    .nav-link { display: flex; align-items: center; padding: 12px 20px; color: #666; text-decoration: none; font-size: 14px; border-left: 3px solid transparent; }
+    .nav-link:hover, .nav-link.active { color: #1890FF; background-color: #f0f7ff; border-left: 3px solid #1890FF; }
+    .nav-link i { font-size: 18px; margin-right: 12px; width: 20px; text-align: center; }
+    .nav-group-title { padding: 15px 20px 5px; font-size: 12px; color: #999; font-weight: 500; }
+
+    /* 主内容区复用+新增 */
+    .main-content { flex: 1; padding: 20px; overflow-y: auto; }
+    .top-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .page-title { font-size: 20px; font-weight: 600; color: #333; margin: 0; }
+    .user-info { display: flex; align-items: center; }
+    .notification { position: relative; margin-right: 20px; cursor: pointer; }
+    .notification i { font-size: 20px; color: #666; }
+    .notification-badge { position: absolute; top: -5px; right: -5px; width: 18px; height: 18px; background: #FF4D4F; color: #fff; border-radius: 50%; font-size: 12px; text-align: center; line-height: 18px; }
+    .user-avatar { width: 40px; height: 40px; border-radius: 50%; background: #1890FF; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 600; margin-right: 10px; }
+    .user-name { font-size: 14px; font-weight: 500; }
+
+    /* 新增：接收确认页面样式 */
+    .filter-bar { background: #fff; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 15px; align-items: center; }
+    .filter-item { flex: 1; min-width: 180px; }
+    .filter-item label { display: block; margin-bottom: 8px; font-weight: 500; font-size: 14px; }
+    .filter-item select, .filter-item input { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+    .filter-actions { display: flex; gap: 10px; align-items: flex-end; }
+    
+    .receive-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; }
+    .receive-table th, .receive-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #f0f0f0; }
+    .receive-table th { background-color: #f8f9fa; font-weight: 600; font-size: 14px; }
+    .receive-table tbody tr:hover { background-color: #f9f9f9; }
+    
+    .status-pending { color: #FAAD14; }
+    .status-archived { color: #52C41A; }
+    .status-rejected { color: #FF4D4F; }
+    .status-overdue { color: #FF4D4F; font-weight: 600; }
+    .status-tag { padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+    .status-tag-pending { background: #fff7e6; color: #FAAD14; }
+    .status-tag-archived { background: #f6ffed; color: #52C41A; }
+    .status-tag-rejected { background: #fff2f0; color: #FF4D4F; }
+    
+    .action-buttons { display: flex; gap: 5px; }
+    .btn-xs { padding: 2px 8px; font-size: 12px; }
+    
+    .pagination { display: flex; justify-content: center; align-items: center; margin-top: 20px; gap: 5px; }
+    .pagination-btn { width: 36px; height: 36px; border-radius: 4px; border: 1px solid #ddd; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .pagination-btn.active { background: #1890FF; color: #fff; border-color: #1890FF; }
+    .pagination-btn.disabled { color: #ccc; cursor: not-allowed; }
+    
+    .bottom-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
+    
+    /* 预览弹窗样式 */
+    .preview-content { display: flex; flex-direction: column; gap: 20px; }
+    .preview-meta { background: #f8f9fa; padding: 15px; border-radius: 8px; }
+    .meta-item { display: flex; margin-bottom: 8px; }
+    .meta-label { width: 80px; font-weight: 500; color: #666; }
+    .meta-value { flex: 1; }
+    .preview-image { text-align: center; }
+    .preview-image img { max-width: 100%; border-radius: 4px; cursor: zoom-in; }
+    
+    /* 退回原因弹窗样式 */
+    .reason-textarea { width: 100%; min-height: 120px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; margin-bottom: 15px; }
+    .reason-count { text-align: right; font-size: 12px; color: #999; margin-top: 5px; }
+    
+    /* 二维码扫描相关样式 */
+    .qr-scan-section { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+    .qr-scan-area { position: relative; width: 100%; max-width: 500px; margin: 0 auto; }
+    .qr-video-container { position: relative; width: 100%; background: #000; border-radius: 8px; overflow: hidden; }
+    .qr-video-container video { width: 100%; display: block; }
+    .qr-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 250px; height: 250px; border: 2px solid #1890FF; border-radius: 8px; pointer-events: none; }
+    .qr-overlay::before { content: ''; position: absolute; top: -2px; left: -2px; width: 30px; height: 30px; border-top: 4px solid #1890FF; border-left: 4px solid #1890FF; }
+    .qr-overlay::after { content: ''; position: absolute; bottom: -2px; right: -2px; width: 30px; height: 30px; border-bottom: 4px solid #1890FF; border-right: 4px solid #1890FF; }
+    .qr-upload-area { border: 2px dashed #ddd; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.3s; }
+    .qr-upload-area:hover { border-color: #1890FF; background: #f0f7ff; }
+    .qr-upload-area.dragover { border-color: #1890FF; background: #e6f7ff; }
+    .qr-preview-image { max-width: 100%; max-height: 400px; border-radius: 8px; margin-top: 15px; }
+    .scan-result { margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; }
+    .scan-result.success { background: #f6ffed; border: 1px solid #b7eb8f; }
+    .scan-result.error { background: #fff2f0; border: 1px solid #ffccc7; }
+    .service-record-detail { margin-top: 20px; }
+    .daily-record { margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; }
+    .daily-record-header { font-weight: 600; font-size: 16px; margin-bottom: 10px; color: #1890FF; }
+    .work-order-item { padding: 10px; background: #fff; border-radius: 4px; margin-bottom: 8px; border-left: 3px solid #1890FF; }
+    .work-order-item .item-title { font-weight: 500; margin-bottom: 5px; }
+    .work-order-item .item-meta { font-size: 12px; color: #666; }
+    
+    /* 紧凑表格样式 - 优化为更紧凑的显示 */
+    .compact-record-table { 
+      width: 100%; 
+      border-collapse: collapse; 
+      font-size: 12px;
+      table-layout: fixed;
+    }
+    .compact-record-table th, .compact-record-table td { 
+      padding: 4px 6px; 
+      text-align: left; 
+      border: 1px solid #e8e8e8; 
+      vertical-align: top;
+      line-height: 1.4;
+    }
+    .compact-record-table th { 
+      background-color: #f8f9fa; 
+      font-weight: 600; 
+      font-size: 11px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      padding: 6px 8px;
+    }
+    .compact-record-table tbody tr:hover { 
+      background-color: #f9f9f9; 
+    }
+    .compact-record-table .date-cell { 
+      width: 70px; 
+      font-weight: 500; 
+      color: #1890FF;
+      white-space: nowrap;
+      font-size: 11px;
+      padding: 4px 4px;
+    }
+    .compact-record-table .nurse-cell { 
+      width: 90px; 
+      color: #666;
+      white-space: nowrap;
+      font-size: 11px;
+      padding: 4px 6px;
+    }
+    .compact-record-table .service-cell { 
+      color: #333;
+      font-size: 11px;
+      padding: 4px 8px;
+    }
+    .compact-record-table .service-item { 
+      margin-bottom: 2px; 
+      padding: 2px 4px; 
+      background: #f0f7ff; 
+      border-radius: 2px; 
+      font-size: 11px;
+      line-height: 1.3;
+    }
+    .compact-record-table .service-item:last-child { 
+      margin-bottom: 0; 
+    }
+    .compact-record-table .service-item-title {
+      font-weight: 500;
+      color: #1890FF;
+      display: inline-block;
+      margin-right: 4px;
+    }
+    .compact-record-table .service-item-content {
+      color: #333;
+    }
+    .compact-record-table .service-item-meta {
+      color: #999;
+      font-size: 10px;
+      margin-top: 1px;
+    }
+    .nurse-change-badge {
+      display: inline-block;
+      padding: 1px 3px;
+      background-color: #FFF7E6;
+      color: #FA8C16;
+      border-radius: 2px;
+      font-size: 10px;
+      margin-left: 3px;
+      font-weight: 500;
+    }
+    
+    /* 服务记录详情模态框优化 */
+    #serviceRecordDetailModal .modal-dialog {
+      max-width: 95% !important;
+      margin: 1rem auto;
+    }
+    #serviceRecordDetailModal .modal-body {
+      padding: 15px;
+      max-height: calc(100vh - 200px);
+      overflow-y: auto;
+    }
+    #dailyRecordsContainer {
+      max-height: calc(100vh - 280px);
+      overflow-y: auto;
+      overflow-x: auto;
+      border: 1px solid #e8e8e8;
+      border-radius: 4px;
+      padding: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- 侧边导航 -->
+    <div class="sidebar">
+      <div class="sidebar-logo">
+        <img src="https://via.placeholder.com/80x40?text=居家长护" alt="系统Logo">
+        <h3>档案管理平台</h3>
+      </div>
+      
+      <div class="nav-group-title">档案管理</div>
+      <ul class="nav-menu">
+        <li class="nav-item">
+          <a href="index.html" class="nav-link">
+            <i class="fa fa-search"></i>
+            <span>电子档案查询</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="档案材料导入.html" class="nav-link">
+            <i class="fa fa-camera"></i>
+            <span>档案材料录入</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="服务计划.html" class="nav-link active">
+            <i class="fa fa-check-square-o"></i>
+            <span>服务记录接收</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="打印.html" class="nav-link">
+            <i class="fa fa-print"></i>
+            <span>评估相关材料打印</span>
+          </a>
+        </li>    
+      </ul>
+    </div>
+
+    <!-- 主内容区 -->
+    <div class="main-content">
+      <!-- 顶部导航 -->
+      <div class="top-nav">
+        <h1 class="page-title">服务记录接收确认</h1>
+        <div class="user-info">
+          <div class="notification">
+            <i class="fa fa-bell-o"></i>
+            <span class="notification-badge">3</span>
+          </div>
+          <div class="user-avatar">档</div>
+          <div class="user-name">档案管理员</div>
+        </div>
+      </div>
+
+      <!-- 筛选区域 -->
+      <div class="filter-bar">
+        <div class="filter-item">
+          <label>材料类型</label>
+          <select id="materialType" disabled>
+            <option value="service_record" selected>服务记录</option>
+          </select>
+          <small class="text-muted" style="display: block; margin-top: 5px;">注：服务计划由服务主管制定，护理员只需上交服务记录</small>
+        </div>
+        <div class="filter-item">
+          <label>提交时间</label>
+          <input type="date" id="startDate" placeholder="开始日期">
+        </div>
+        <div class="filter-item">
+          <label>至</label>
+          <input type="date" id="endDate" placeholder="结束日期">
+        </div>
+        <div class="filter-item">
+          <label>护理员</label>
+          <select id="nurse">
+            <option value="">全部护理员</option>
+            <option value="nurse1">张护理员</option>
+            <option value="nurse2">李护理员</option>
+            <option value="nurse3">王护理员</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <label>材料状态</label>
+          <select id="materialStatus">
+            <option value="">全部状态</option>
+            <option value="pending">待确认</option>
+            <option value="archived">已归档</option>
+            <option value="rejected">已退回</option>
+          </select>
+        </div>
+        <div class="filter-actions">
+          <button class="btn btn-primary" id="servicePlanSearchBtn">
+            <i class="fa fa-search"></i> 查询
+          </button>
+          <button class="btn btn-outline-secondary" id="servicePlanResetBtn">
+            <i class="fa fa-refresh"></i> 重置
+          </button>
+        </div>
+      </div>
+
+      <!-- 待接收材料列表 -->
+      <div class="card">
+        <div class="card-header">待接收材料列表</div>
+        <div class="card-body p-0">
+          <table class="receive-table">
+            <thead>
+              <tr>
+                <th>序号</th>
+                <th>护理员</th>
+                <th>服务对象数量</th>
+                <th>待确认材料</th>
+                <th>已归档材料</th>
+                <th>已退回材料</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>1</td>
+                <td>张护理员</td>
+                <td>2</td>
+                <td>1</td>
+                <td>1</td>
+                <td>0</td>
+                <td class="action-buttons">
+                  <button class="btn btn-xs btn-outline-secondary" onclick="showNurseMaterials('张护理员')" title="查看该护理员服务哪些服务对象，从而核对纸质材料是否齐全">查看材料</button>
+                </td>
+              </tr>
+              <tr>
+                <td>2</td>
+                <td>李护理员</td>
+                <td>2</td>
+                <td>1 <span class="status-overdue"><i class="fa fa-exclamation-circle"></i> 超期</span></td>
+                <td>0</td>
+                <td>1</td>
+                <td class="action-buttons">
+                  <button class="btn btn-xs btn-outline-secondary" onclick="showNurseMaterials('李护理员')" title="查看该护理员服务哪些服务对象，从而核对纸质材料是否齐全">查看材料</button>
+                </td>
+              </tr>
+              <tr>
+                <td>3</td>
+                <td>王护理员</td>
+                <td>1</td>
+                <td>1</td>
+                <td>0</td>
+                <td>0</td>
+                <td class="action-buttons">
+                  <button class="btn btn-xs btn-outline-secondary" onclick="showNurseMaterials('王护理员')" title="查看该护理员服务哪些服务对象，从而核对纸质材料是否齐全">查看材料</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 分页控件 -->
+      <div class="pagination">
+        <button class="pagination-btn disabled"><i class="fa fa-angle-left"></i></button>
+        <button class="pagination-btn active">1</button>
+        <button class="pagination-btn">2</button>
+        <button class="pagination-btn">3</button>
+        <button class="pagination-btn"><i class="fa fa-angle-right"></i></button>
+      </div>
+
+      <!-- 底部操作按钮 -->
+      <div class="bottom-actions">
+        <div>共 <strong>3</strong> 位护理员</div>
+        <div>
+          <button class="btn btn-primary me-2" onclick="openQRScanner()">
+            <i class="fa fa-qrcode"></i> 扫描二维码接收
+          </button>
+          <button class="btn btn-outline-secondary">
+            <i class="fa fa-download"></i> 导出接收记录
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 材料预览模态框 -->
+  <div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="previewModalLabel">查看材料 - <span id="modalNurseName"></span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="preview-content">
+            <div class="alert alert-info" style="margin-bottom: 15px; padding: 10px 15px; background-color: #e6f7ff; border: 1px solid #91d5ff; border-radius: 4px; color: #1890ff; font-size: 13px;">
+              <i class="fa fa-info-circle"></i> <strong>说明：</strong>查看材料是查看该护理员服务哪些服务对象，从而核对纸质材料是否齐全。
+            </div>
+            <div class="preview-meta" style="margin-bottom: 15px;">
+              <div class="meta-item">
+                <div class="meta-label">护理员：</div>
+                <div class="meta-value" id="modalNurseNameValue"></div>
+              </div>
+            </div>
+            <div>
+              <h6 style="margin-bottom: 10px; font-weight: 600;">服务对象列表：</h6>
+              <table class="table table-bordered table-hover" style="margin-bottom: 0;">
+                <thead style="background-color: #f8f9fa;">
+                  <tr>
+                    <th style="width: 5%;">序号</th>
+                    <th style="width: 30%;">服务对象</th>
+                    <th style="width: 20%;">材料类型</th>
+                    <th style="width: 20%;">提交时间</th>
+                    <th style="width: 15%;">材料状态</th>
+                    <th style="width: 10%;">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="serviceObjectsList">
+                  <!-- 服务对象列表将通过JavaScript动态加载 -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 二维码扫描模态框 -->
+  <div class="modal fade" id="qrScannerModal" tabindex="-1" aria-labelledby="qrScannerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="qrScannerModalLabel">扫描二维码接收服务记录</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="qr-scan-section">
+            <ul class="nav nav-tabs mb-3" id="scanTabs" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="camera-tab" data-bs-toggle="tab" data-bs-target="#camera-scan" type="button" role="tab">
+                  <i class="fa fa-camera"></i> 摄像头扫描
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="upload-tab" data-bs-toggle="tab" data-bs-target="#upload-scan" type="button" role="tab">
+                  <i class="fa fa-upload"></i> 上传图片扫描
+                </button>
+              </li>
+            </ul>
+            <div class="tab-content" id="scanTabContent">
+              <div class="tab-pane fade show active" id="camera-scan" role="tabpanel">
+                <div class="qr-scan-area">
+                  <div class="qr-video-container" id="videoContainer">
+                    <video id="qrVideo" playsinline></video>
+                    <div class="qr-overlay"></div>
+                  </div>
+                  <div class="text-center mt-3">
+                    <button class="btn btn-primary" id="startScanBtn">
+                      <i class="fa fa-play"></i> 开始扫描
+                    </button>
+                    <button class="btn btn-outline-secondary ms-2" id="stopScanBtn" style="display: none;">
+                      <i class="fa fa-stop"></i> 停止扫描
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="tab-pane fade" id="upload-scan" role="tabpanel">
+                <div class="qr-upload-area" id="uploadArea">
+                  <i class="fa fa-cloud-upload" style="font-size: 48px; color: #999; margin-bottom: 15px;"></i>
+                  <p>点击或拖拽图片到此处上传</p>
+                  <p class="text-muted" style="font-size: 12px;">支持 JPG、PNG 格式</p>
+                  <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+                </div>
+                <div id="imagePreview" style="display: none;">
+                  <img id="previewImage" class="qr-preview-image" alt="预览图片">
+                  <div class="text-center mt-3">
+                    <button class="btn btn-primary" id="scanUploadedBtn">
+                      <i class="fa fa-search"></i> 识别二维码
+                    </button>
+                    <button class="btn btn-outline-secondary ms-2" id="reuploadBtn">
+                      <i class="fa fa-refresh"></i> 重新上传
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div id="scanResult" class="scan-result" style="display: none;">
+              <div id="scanResultContent"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 服务记录详情模态框（按日显示） -->
+  <div class="modal fade" id="serviceRecordDetailModal" tabindex="-1" aria-labelledby="serviceRecordDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog" style="max-width: 95%;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="serviceRecordDetailModalLabel">服务记录详情</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="preview-content">
+            <div class="preview-meta" style="margin-bottom: 15px;">
+              <div class="meta-item">
+                <div class="meta-label">服务对象：</div>
+                <div class="meta-value" id="recordClientName"></div>
+              </div>
+              <div class="meta-item">
+                <div class="meta-label">护理员：</div>
+                <div class="meta-value" id="recordNurseName"></div>
+              </div>
+              <div class="meta-item">
+                <div class="meta-label">记录月份：</div>
+                <div class="meta-value" id="recordMonth"></div>
+              </div>
+            </div>
+            <div class="service-record-detail" id="dailyRecordsContainer">
+              <!-- 按日显示的服务记录内容 -->
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+          <button type="button" class="btn btn-primary" onclick="confirmArchiveFromDetail()">确认归档</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 退回原因模态框 -->
+  <div class="modal fade" id="rejectModal" tabindex="-1" aria-labelledby="rejectModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="rejectModalLabel">退回材料</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">退回原因</label>
+            <textarea class="reason-textarea" id="rejectReason" placeholder="请填写退回原因，便于护理员修改（限200字）"></textarea>
+            <div class="reason-count"><span id="reasonLength">0</span>/200</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="button" class="btn btn-danger" onclick="confirmReject()">确认退回</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 引入Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // 统一消息提示函数
+    function showMessage(message, type = 'info') {
+      const alertClass = {
+        'success': 'alert-success',
+        'error': 'alert-danger',
+        'warning': 'alert-warning',
+        'info': 'alert-info'
+      }[type] || 'alert-info';
+      
+      const alertDiv = document.createElement('div');
+      alertDiv.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
+      alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px; max-width: 500px;';
+      alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      `;
+      document.body.appendChild(alertDiv);
+      
+      setTimeout(() => {
+        alertDiv.remove();
+      }, 3000);
+    }
+  </script>
+  <script>
+    // 护理员服务对象数据（模拟数据）- 只保留服务记录
+    const nurseData = {
+      '张护理员': [
+        { id: 1, name: '张三', idCard: '330623********1234', materialType: '服务记录', submitTime: '2024-11-20', status: 'pending', statusText: '待确认' },
+        { id: 4, name: '赵六', idCard: '330623********3456', materialType: '服务记录', submitTime: '2024-11-18', status: 'archived', statusText: '已归档' }
+      ],
+      '李护理员': [
+        { id: 2, name: '李四', idCard: '330623********5678', materialType: '服务记录', submitTime: '2024-11-15', status: 'pending', statusText: '待确认', overdue: true },
+        { id: 5, name: '钱七', idCard: '330623********7890', materialType: '服务记录', submitTime: '2024-11-21', status: 'rejected', statusText: '已退回' }
+      ],
+      '王护理员': [
+        { id: 3, name: '王五', idCard: '330623********9012', materialType: '服务记录', submitTime: '2024-11-22', status: 'pending', statusText: '待确认' }
+      ]
+    };
+
+    // 服务记录详细数据（按日显示工单项目）
+    const serviceRecordDetails = {
+      1: {
+        clientName: '张三',
+        nurseName: '张护理员',
+        month: '2024年11月',
+        dailyRecords: {
+          '2024-11-01': [
+            { id: 'w001', nurse: '张护理员', title: '生活照料', content: '协助进食、穿衣', time: '09:00-10:00', duration: '60分钟' },
+            { id: 'w002', nurse: '张护理员', title: '身体护理', content: '测量血压、体温', time: '14:00-14:30', duration: '30分钟' }
+          ],
+          '2024-11-02': [
+            { id: 'w003', nurse: '张护理员', title: '生活照料', content: '协助如厕、洗浴', time: '09:00-10:30', duration: '90分钟' }
+          ],
+          '2024-11-03': [
+            { id: 'w004', nurse: '张护理员', title: '康复训练', content: '协助进行肢体活动', time: '10:00-11:00', duration: '60分钟' },
+            { id: 'w005', nurse: '张护理员', title: '心理慰藉', content: '陪伴聊天、读报', time: '15:00-16:00', duration: '60分钟' }
+          ],
+          '2024-11-04': [
+            { id: 'w006', nurse: '李护理员', title: '生活照料', content: '协助进食', time: '08:00-09:00', duration: '60分钟' },
+            { id: 'w007', nurse: '张护理员', title: '身体护理', content: '测量血压、血糖', time: '14:00-14:30', duration: '30分钟' }
+          ]
+        }
+      },
+      2: {
+        clientName: '李四',
+        nurseName: '李护理员',
+        month: '2024年11月',
+        dailyRecords: {
+          '2024-11-01': [
+            { id: 'w006', nurse: '李护理员', title: '生活照料', content: '协助进食', time: '08:00-09:00', duration: '60分钟' }
+          ],
+          '2024-11-02': [
+            { id: 'w007', nurse: '李护理员', title: '身体护理', content: '测量血压、血糖', time: '09:00-09:30', duration: '30分钟' },
+            { id: 'w008', nurse: '李护理员', title: '生活照料', content: '协助穿衣、整理床铺', time: '10:00-11:00', duration: '60分钟' }
+          ]
+        }
+      },
+      3: {
+        clientName: '王五',
+        nurseName: '王护理员',
+        month: '2024年11月',
+        dailyRecords: {
+          '2024-11-01': [
+            { id: 'w009', nurse: '王护理员', title: '生活照料', content: '协助进食、如厕', time: '08:30-09:30', duration: '60分钟' },
+            { id: 'w010', nurse: '王护理员', title: '康复训练', content: '协助进行康复运动', time: '14:00-15:00', duration: '60分钟' }
+          ]
+        }
+      }
+    };
+
+    // 二维码扫描相关变量
+    let qrScanner = null;
+    let currentVideoStream = null;
+    let currentRecordId = null;
+
+    // 显示护理员材料（服务对象列表）
+    function showNurseMaterials(nurseName) {
+      const nurseMaterials = nurseData[nurseName] || [];
+      
+      // 设置模态框标题和护理员名称
+      document.getElementById('previewModalLabel').innerHTML = '查看材料 - <span id="modalNurseName">' + nurseName + '</span>';
+      document.getElementById('modalNurseNameValue').textContent = nurseName;
+      
+      // 清空并填充服务对象列表
+      const tbody = document.getElementById('serviceObjectsList');
+      tbody.innerHTML = '';
+      
+      if (nurseMaterials.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999;">暂无服务对象</td></tr>';
+      } else {
+        nurseMaterials.forEach((item, index) => {
+          const tr = document.createElement('tr');
+          
+          // 状态标签
+          let statusHtml = '';
+          if (item.status === 'pending') {
+            if (item.overdue) {
+              statusHtml = '<span class="status-overdue">待确认 <i class="fa fa-exclamation-circle"></i> 超期</span>';
+            } else {
+              statusHtml = '<span class="status-tag status-tag-pending">待确认</span>';
+            }
+          } else if (item.status === 'archived') {
+            statusHtml = '<span class="status-tag status-tag-archived">已归档</span>';
+          } else if (item.status === 'rejected') {
+            statusHtml = '<span class="status-tag status-tag-rejected">已退回</span>';
+          }
+          
+          // 操作按钮
+          let actionHtml = '';
+          if (item.status === 'pending' || item.status === 'rejected') {
+            actionHtml = '<button class="btn btn-xs btn-outline-secondary" onclick="viewRecordDetail(' + item.id + ')" title="查看服务记录详情（按日显示工单项目）">查看详情</button> ' +
+                        '<button class="btn btn-xs btn-primary" onclick="confirmArchive(' + item.id + ')">确认归档</button> ' +
+                        '<button class="btn btn-xs btn-danger" onclick="showRejectModal(' + item.id + ')">退回</button>';
+          } else {
+            actionHtml = '<button class="btn btn-xs btn-outline-secondary" onclick="viewRecordDetail(' + item.id + ')" title="查看服务记录详情（按日显示工单项目）">查看详情</button>';
+          }
+          
+          tr.innerHTML = 
+            '<td>' + (index + 1) + '</td>' +
+            '<td>' + item.name + '（' + item.idCard + '）</td>' +
+            '<td>' + item.materialType + '</td>' +
+            '<td>' + item.submitTime + '</td>' +
+            '<td>' + statusHtml + '</td>' +
+            '<td>' + actionHtml + '</td>';
+          
+          tbody.appendChild(tr);
+        });
+      }
+      
+      // 显示模态框
+      const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
+      previewModal.show();
+    }
+
+    // 退回原因字数统计
+    document.getElementById('rejectReason').addEventListener('input', function() {
+      const length = this.value.length;
+      document.getElementById('reasonLength').textContent = length;
+      if (length > 200) {
+        this.value = this.value.substring(0, 200);
+        document.getElementById('reasonLength').textContent = 200;
+      }
+    });
+
+    // 显示退回弹窗
+    function showRejectModal(id) {
+      const rejectModal = new bootstrap.Modal(document.getElementById('rejectModal'));
+      rejectModal.show();
+      // 可根据ID设置退回的材料ID
+      document.getElementById('rejectReason').value = '';
+      document.getElementById('reasonLength').textContent = '0';
+    }
+
+    // 服务计划查询功能
+    function performServicePlanSearch() {
+      const materialType = document.getElementById('materialType').value;
+      const startDate = document.getElementById('startDate').value;
+      const endDate = document.getElementById('endDate').value;
+      const nurse = document.getElementById('nurse').value;
+      const materialStatus = document.getElementById('materialStatus').value;
+      
+      const table = document.querySelector('.receive-table tbody');
+      if (!table) return;
+      
+      const rows = table.querySelectorAll('tr');
+      let visibleCount = 0;
+      
+      rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length === 0) return;
+        
+        const nurseName = cells[1] ? cells[1].textContent.trim() : '';
+        
+        let match = true;
+        
+        // 护理员匹配
+        if (nurse && nurseName !== nurse) {
+          match = false;
+        }
+        
+        // 这里可以根据其他条件进行过滤
+        // 由于示例数据有限，主要按护理员过滤
+        
+        if (match) {
+          row.style.display = '';
+          visibleCount++;
+        } else {
+          row.style.display = 'none';
+        }
+      });
+      
+      showMessage(`查询完成，找到 ${visibleCount} 条记录`, 'success');
+    }
+
+    // 绑定查询和重置按钮
+    const servicePlanSearchBtn = document.getElementById('servicePlanSearchBtn');
+    if (servicePlanSearchBtn) {
+      servicePlanSearchBtn.addEventListener('click', performServicePlanSearch);
+    }
+
+    const servicePlanResetBtn = document.getElementById('servicePlanResetBtn');
+    if (servicePlanResetBtn) {
+      servicePlanResetBtn.addEventListener('click', function() {
+        document.getElementById('materialType').value = '';
+        document.getElementById('startDate').value = '';
+        document.getElementById('endDate').value = '';
+        document.getElementById('nurse').value = '';
+        document.getElementById('materialStatus').value = '';
+        
+        // 显示所有行
+        const table = document.querySelector('.receive-table tbody');
+        if (table) {
+          table.querySelectorAll('tr').forEach(row => {
+            row.style.display = '';
+          });
+        }
+        
+        showMessage('筛选条件已重置', 'info');
+      });
+    }
+
+    // 导出接收记录按钮
+    document.querySelectorAll('.bottom-actions .btn-outline-secondary').forEach(btn => {
+      if (btn.textContent.includes('导出')) {
+        btn.addEventListener('click', function() {
+          showMessage('导出功能已执行，文件正在生成...', 'info');
+          // 实际项目中这里会调用API导出数据
+        });
+      }
+    });
+
+    // 确认归档
+    function confirmArchive(id) {
+      if (confirm('确认将此材料归档吗？')) {
+        showMessage('归档成功！材料状态已更新为"已归档"', 'success');
+        // 实际项目中可根据ID更新状态
+        // 刷新页面或更新表格数据
+        setTimeout(() => {
+          location.reload();
+        }, 1500);
+      }
+    }
+
+    // 确认退回
+    function confirmReject() {
+      const reason = document.getElementById('rejectReason').value.trim();
+      if (!reason) {
+        showMessage('请填写退回原因', 'warning');
+        return;
+      }
+      if (confirm('确认退回此材料吗？退回原因将同步给护理员')) {
+        showMessage('退回成功！护理员将收到退回通知', 'success');
+        const rejectModal = bootstrap.Modal.getInstance(document.getElementById('rejectModal'));
+        if (rejectModal) {
+          rejectModal.hide();
+        }
+        // 实际项目中可提交退回原因并更新状态
+        setTimeout(() => {
+          location.reload();
+        }, 1500);
+      }
+    }
+
+    // 打开二维码扫描器
+    function openQRScanner() {
+      const modal = new bootstrap.Modal(document.getElementById('qrScannerModal'));
+      modal.show();
+      // 重置状态
+      document.getElementById('scanResult').style.display = 'none';
+      document.getElementById('imagePreview').style.display = 'none';
+      document.getElementById('previewImage').src = '';
+    }
+
+    // 开始摄像头扫描
+    document.getElementById('startScanBtn').addEventListener('click', async function() {
+      try {
+        const video = document.getElementById('qrVideo');
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: 'environment' } // 使用后置摄像头
+        });
+        currentVideoStream = stream;
+        video.srcObject = stream;
+        video.play();
+        
+        // 初始化QR Scanner
+        qrScanner = new QrScanner(
+          video,
+          result => handleQRCodeResult(result.data),
+          {
+            returnDetailedScanResult: true,
+            highlightScanRegion: true,
+            highlightCodeOutline: true
+          }
+        );
+        
+        await qrScanner.start();
+        document.getElementById('startScanBtn').style.display = 'none';
+        document.getElementById('stopScanBtn').style.display = 'inline-block';
+      } catch (error) {
+        showMessage('无法访问摄像头：' + error.message, 'error');
+      }
+    });
+
+    // 停止扫描
+    document.getElementById('stopScanBtn').addEventListener('click', function() {
+      if (qrScanner) {
+        qrScanner.stop();
+        qrScanner.destroy();
+        qrScanner = null;
+      }
+      if (currentVideoStream) {
+        currentVideoStream.getTracks().forEach(track => track.stop());
+        currentVideoStream = null;
+      }
+      const video = document.getElementById('qrVideo');
+      video.srcObject = null;
+      document.getElementById('startScanBtn').style.display = 'inline-block';
+      document.getElementById('stopScanBtn').style.display = 'none';
+    });
+
+    // 上传图片扫描
+    const uploadArea = document.getElementById('uploadArea');
+    const imageUpload = document.getElementById('imageUpload');
+    const imagePreview = document.getElementById('imagePreview');
+    const previewImage = document.getElementById('previewImage');
+
+    uploadArea.addEventListener('click', () => imageUpload.click());
+    
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    });
+    
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('dragover');
+    });
+    
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        handleImageFile(files[0]);
+      }
+    });
+
+    imageUpload.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        handleImageFile(e.target.files[0]);
+      }
+    });
+
+    function handleImageFile(file) {
+      if (!file.type.startsWith('image/')) {
+        showMessage('请上传图片文件', 'warning');
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        previewImage.src = e.target.result;
+        imagePreview.style.display = 'block';
+        uploadArea.style.display = 'none';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    document.getElementById('reuploadBtn').addEventListener('click', () => {
+      imagePreview.style.display = 'none';
+      uploadArea.style.display = 'block';
+      previewImage.src = '';
+      imageUpload.value = '';
+    });
+
+    // 识别上传的图片中的二维码
+    document.getElementById('scanUploadedBtn').addEventListener('click', async function() {
+      const image = previewImage;
+      if (!image.src) {
+        showMessage('请先上传图片', 'warning');
+        return;
+      }
+
+      try {
+        // 使用OpenCV进行图片预处理（如果已加载）
+        if (typeof cv !== 'undefined') {
+          await preprocessImageWithOpenCV(image);
+        }
+        
+        // 使用QR Scanner识别二维码
+        const result = await QrScanner.scanImage(image, {
+          returnDetailedScanResult: true
+        });
+        
+        handleQRCodeResult(result.data);
+      } catch (error) {
+        showMessage('二维码识别失败：' + error.message + '，请确保图片清晰且二维码完整', 'error');
+      }
+    });
+
+    // 使用OpenCV进行图片预处理
+    async function preprocessImageWithOpenCV(image) {
+      return new Promise((resolve, reject) => {
+        if (typeof cv === 'undefined') {
+          resolve(); // OpenCV未加载，跳过预处理
+          return;
+        }
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = image.width;
+        canvas.height = image.height;
+        ctx.drawImage(image, 0, 0);
+        
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const src = cv.matFromImageData(imgData);
+        const dst = new cv.Mat();
+        const gray = new cv.Mat();
+        
+        // 转换为灰度图
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+        
+        // 高斯模糊去噪
+        cv.GaussianBlur(gray, dst, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
+        
+        // 自适应阈值处理
+        cv.adaptiveThreshold(dst, gray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
+        
+        // 将处理后的图像写回canvas
+        cv.imshow(canvas, gray);
+        previewImage.src = canvas.toDataURL();
+        
+        // 清理内存
+        src.delete();
+        dst.delete();
+        gray.delete();
+        
+        resolve();
+      });
+    }
+
+    // 处理二维码识别结果
+    function handleQRCodeResult(qrData) {
+      try {
+        // 解析二维码数据（假设格式为JSON）
+        const data = JSON.parse(qrData);
+        
+        // 显示识别结果
+        const resultDiv = document.getElementById('scanResult');
+        const resultContent = document.getElementById('scanResultContent');
+        
+        if (data.type === 'service_record' && data.recordId) {
+          resultContent.innerHTML = `
+            <div class="alert alert-success">
+              <h6><i class="fa fa-check-circle"></i> 二维码识别成功</h6>
+              <p><strong>服务对象：</strong>${data.clientName || '未知'}</p>
+              <p><strong>护理员：</strong>${data.nurseName || '未知'}</p>
+              <p><strong>记录月份：</strong>${data.month || '未知'}</p>
+              <p><strong>记录ID：</strong>${data.recordId}</p>
+            </div>
+            <div class="text-center mt-3">
+              <button class="btn btn-primary" onclick="confirmArchiveFromQR(${data.recordId})">
+                <i class="fa fa-check"></i> 确认接收并归档
+              </button>
+            </div>
+          `;
+          resultDiv.className = 'scan-result success';
+          resultDiv.style.display = 'block';
+          
+          // 停止扫描
+          if (qrScanner) {
+            qrScanner.stop();
+          }
+        } else {
+          throw new Error('无效的二维码数据格式');
+        }
+      } catch (error) {
+        const resultDiv = document.getElementById('scanResult');
+        const resultContent = document.getElementById('scanResultContent');
+        resultContent.innerHTML = `
+          <div class="alert alert-danger">
+            <h6><i class="fa fa-exclamation-circle"></i> 识别失败</h6>
+            <p>${error.message}</p>
+            <p class="text-muted" style="font-size: 12px; margin-top: 10px;">请确保：</p>
+            <ul style="font-size: 12px;">
+              <li>图片清晰，二维码完整</li>
+              <li>二维码未被遮挡或损坏</li>
+              <li>光线充足，避免反光</li>
+            </ul>
+          </div>
+        `;
+        resultDiv.className = 'scan-result error';
+        resultDiv.style.display = 'block';
+      }
+    }
+
+    // 从二维码确认归档
+    function confirmArchiveFromQR(recordId) {
+      if (confirm('确认接收并归档此服务记录吗？')) {
+        showMessage('服务记录已成功接收并归档', 'success');
+        // 实际项目中这里会调用API更新状态
+        setTimeout(() => {
+          location.reload();
+        }, 1500);
+      }
+    }
+
+    // 查看服务记录详情（按日显示）
+    function viewRecordDetail(recordId) {
+      const record = serviceRecordDetails[recordId];
+      if (!record) {
+        showMessage('未找到该服务记录的详细信息', 'warning');
+        return;
+      }
+
+      // 设置基本信息（添加安全检查）
+      const clientNameEl = document.getElementById('recordClientName');
+      const nurseNameEl = document.getElementById('recordNurseName');
+      const monthEl = document.getElementById('recordMonth');
+      
+      if (clientNameEl) clientNameEl.textContent = record.clientName || '';
+      if (nurseNameEl) nurseNameEl.textContent = record.nurseName || '';
+      if (monthEl) monthEl.textContent = record.month || '';
+      currentRecordId = recordId;
+
+      // 使用紧凑表格显示一个月的数据
+      const container = document.getElementById('dailyRecordsContainer');
+      if (!container) {
+        console.error('dailyRecordsContainer元素未找到');
+        showMessage('页面元素加载错误，请刷新后重试', 'error');
+        return;
+      }
+      container.innerHTML = '';
+
+      // 创建表格
+      const table = document.createElement('table');
+      table.className = 'compact-record-table';
+      
+      // 表头
+      const thead = document.createElement('thead');
+      thead.innerHTML = `
+        <tr>
+          <th style="width: 70px;">日期</th>
+          <th style="width: 90px;">护理员</th>
+          <th>服务项目</th>
+        </tr>
+      `;
+      table.appendChild(thead);
+
+      // 表体
+      const tbody = document.createElement('tbody');
+      
+      // 获取月份的所有日期
+      const dates = Object.keys(record.dailyRecords || {}).sort();
+      const monthMatch = record.month ? record.month.match(/(\d{4})年(\d{1,2})月/) : null;
+      if (monthMatch) {
+        const year = parseInt(monthMatch[1]);
+        const monthNum = parseInt(monthMatch[2]);
+        const daysInMonth = new Date(year, monthNum, 0).getDate();
+        
+        // 按日期分组，同一天可能有多个护理员
+        const dateGroups = {};
+        dates.forEach(date => {
+          const day = parseInt(date.split('-')[2]);
+          if (!isNaN(day) && day >= 1 && day <= 31) {
+            if (!dateGroups[day]) {
+              dateGroups[day] = [];
+            }
+            const dayRecords = record.dailyRecords[date] || [];
+            dayRecords.forEach(workOrder => {
+              if (workOrder) {
+                dateGroups[day].push({
+                  date: date,
+                  nurse: workOrder.nurse || record.nurseName || '未知', // 使用工单的护理员或记录的默认护理员
+                  title: workOrder.title || '',
+                  content: workOrder.content || '',
+                  time: workOrder.time || '',
+                  duration: workOrder.duration || '',
+                  ...workOrder
+                });
+              }
+            });
+          }
+        });
+        
+        // 生成表格行（1-31日）
+        for (let day = 1; day <= daysInMonth; day++) {
+          if (dateGroups[day] && dateGroups[day].length > 0) {
+            // 按护理员分组
+            const nurseGroups = {};
+            dateGroups[day].forEach(item => {
+              if (!nurseGroups[item.nurse]) {
+                nurseGroups[item.nurse] = [];
+              }
+              nurseGroups[item.nurse].push(item);
+            });
+            
+            // 为每个护理员创建一行
+            const nurses = Object.keys(nurseGroups);
+            nurses.forEach((nurse, nurseIndex) => {
+              const tr = document.createElement('tr');
+              const items = nurseGroups[nurse];
+              
+              // 日期列（只在第一行显示，只显示日期）
+              if (nurseIndex === 0) {
+                const dateCell = document.createElement('td');
+                dateCell.className = 'date-cell';
+                dateCell.textContent = `${day}日`;
+                dateCell.setAttribute('rowspan', nurses.length);
+                tr.appendChild(dateCell);
+              }
+              
+              // 护理员列
+              const nurseCell = document.createElement('td');
+              nurseCell.className = 'nurse-cell';
+              nurseCell.textContent = nurse;
+              // 如果同一天有多个护理员，显示更换标记
+              if (nurses.length > 1) {
+                const badge = document.createElement('span');
+                badge.className = 'nurse-change-badge';
+                badge.textContent = '更换';
+                nurseCell.appendChild(badge);
+              }
+              tr.appendChild(nurseCell);
+              
+              // 服务项目列（紧凑显示）
+              const serviceCell = document.createElement('td');
+              serviceCell.className = 'service-cell';
+              items.forEach((item, itemIndex) => {
+                const serviceItem = document.createElement('div');
+                serviceItem.className = 'service-item';
+                serviceItem.innerHTML = `
+                  <span class="service-item-title">${item.title}</span>
+                  <span class="service-item-content">${item.content}</span>
+                  <div class="service-item-meta">${item.time} | ${item.duration}</div>
+                `;
+                serviceCell.appendChild(serviceItem);
+              });
+              tr.appendChild(serviceCell);
+              
+              tbody.appendChild(tr);
+            });
+          } else {
+            // 无服务记录的日期
+            const tr = document.createElement('tr');
+            tr.style.opacity = '0.5';
+            tr.innerHTML = `
+              <td class="date-cell">${day}日</td>
+              <td class="nurse-cell">-</td>
+              <td class="service-cell" style="color: #999; font-size: 11px;">无服务记录</td>
+            `;
+            tbody.appendChild(tr);
+          }
+        }
+      }
+      
+      table.appendChild(tbody);
+      container.appendChild(table);
+
+      // 显示模态框
+      const modalElement = document.getElementById('serviceRecordDetailModal');
+      if (modalElement) {
+        // 先关闭可能存在的模态框实例
+        const existingModal = bootstrap.Modal.getInstance(modalElement);
+        if (existingModal) {
+          existingModal.hide();
+        }
+        // 创建新的模态框实例并显示
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+      } else {
+        console.error('服务记录详情模态框元素未找到');
+        showMessage('无法打开详情页面，请刷新后重试', 'error');
+      }
+    }
+
+    // 从详情页确认归档
+    function confirmArchiveFromDetail() {
+      if (currentRecordId) {
+        confirmArchive(currentRecordId);
+        const modal = bootstrap.Modal.getInstance(document.getElementById('serviceRecordDetailModal'));
+        if (modal) {
+          modal.hide();
+        }
+      }
+    }
+
+    // 模态框关闭时清理资源
+    document.getElementById('qrScannerModal').addEventListener('hidden.bs.modal', function() {
+      // 停止扫描
+      if (qrScanner) {
+        qrScanner.stop();
+        qrScanner.destroy();
+        qrScanner = null;
+      }
+      if (currentVideoStream) {
+        currentVideoStream.getTracks().forEach(track => track.stop());
+        currentVideoStream = null;
+      }
+      const video = document.getElementById('qrVideo');
+      video.srcObject = null;
+      document.getElementById('startScanBtn').style.display = 'inline-block';
+      document.getElementById('stopScanBtn').style.display = 'none';
+      // 重置上传区域
+      document.getElementById('imagePreview').style.display = 'none';
+      document.getElementById('uploadArea').style.display = 'block';
+      document.getElementById('scanResult').style.display = 'none';
+    });
+
+    // 修复模态框关闭后灰屏问题
+    document.addEventListener('DOMContentLoaded', function() {
+      const modals = document.querySelectorAll('.modal');
+      modals.forEach(function(modal) {
+        modal.addEventListener('hidden.bs.modal', function() {
+          const backdrops = document.querySelectorAll('.modal-backdrop');
+          backdrops.forEach(function(backdrop) {
+            backdrop.remove();
+          });
+          document.body.classList.remove('modal-open');
+          document.body.style.overflow = '';
+          document.body.style.paddingRight = '';
+        });
+      });
+    });
+  </script>
+</body>
+</html>
